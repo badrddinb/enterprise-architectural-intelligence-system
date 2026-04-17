@@ -1,0 +1,284 @@
+# =============================================================================
+# docker-compose.yml — Enterprise Architectural Intelligence System
+# Local simulation environment with LocalStack, Qdrant, and all microservices
+# =============================================================================
+# Usage:
+#   docker compose up -d                  # Start all services
+#   docker compose logs -f localstack     # Follow LocalStack logs
+#   docker compose down -v                # Stop and remove volumes
+# =============================================================================
+
+services:
+
+  # =========================================================================
+  # LocalStack — Simulated AWS (S3, SQS, Step Functions)
+  # =========================================================================
+  localstack:
+    container_name: localstack
+    image: localstack/localstack:3.7
+    restart: unless-stopped
+    ports:
+      - "4566:4566"          # Main LocalStack edge proxy
+      - "4510-4559:4510-4559"  # External service ports range
+    environment:
+      - SERVICES=${SERVICES:-s3,sqs,stepfunctions,iam}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-test}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-test}
+      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1}
+      - LOCALSTACK_HOST=${LOCALSTACK_HOST:-localstack}
+      - LOCALSTACK_ACKNOWLEDGE_ACCOUNT_REQUIREMENT=1
+      - DEBUG=${DEBUG:-0}
+      - PERSISTENCE=${PERSISTENCE:-0}
+      - DOCKER_HOST=unix:///var/run/docker.sock
+    volumes:
+      - ./init-aws.sh:/etc/localstack/init/ready.d/init-aws.sh:ro
+      - ./statemachine/dummy-state-machine.asl.json:/opt/localstack/state-machine-definition.json:ro
+      - localstack-data:/var/lib/localstack
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - arch-ai-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+  # =========================================================================
+  # Qdrant — Vector Database
+  # =========================================================================
+  qdrant:
+    container_name: qdrant
+    image: qdrant/qdrant:latest
+    restart: unless-stopped
+    ports:
+      - "6333:6333"          # REST API
+      - "6334:6334"          # gRPC API
+    environment:
+      - QDRANT__SERVICE__GRPC_PORT=6334
+    volumes:
+      - qdrant-data:/qdrant/storage
+    networks:
+      - arch-ai-net
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/6333' || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # =========================================================================
+  # Dimension Audit Engine — Java Spring Boot (Math Audit)
+  # =========================================================================
+  dimension-audit:
+    container_name: dimension-audit
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.java
+    restart: unless-stopped
+    ports:
+      - "${JAVA_SERVICE_PORT:-8080}:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=${SPRING_PROFILES_ACTIVE:-local}
+      - AWS_ENDPOINT_URL=http://localstack:4566
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-test}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-test}
+      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1}
+      - S3_BUCKET_NAME=${S3_BUCKET_NAME:-arch-ingestion-bucket}
+      - QDRANT_URI=${QDRANT_URI:-http://qdrant:6333}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    depends_on:
+      localstack:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+    networks:
+      - arch-ai-net
+
+  # =========================================================================
+  # Python Microservice: File Ingestion
+  # =========================================================================
+  file-ingestion:
+    container_name: file-ingestion
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.python
+      args:
+        SERVICE_DIR: lambda/file_ingestion
+        SERVICE_PORT: 8001
+    restart: unless-stopped
+    ports:
+      - "${FILE_INGESTION_PORT:-8001}:8001"
+    environment:
+      - AWS_ENDPOINT_URL=http://localstack:4566
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-test}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-test}
+      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1}
+      - S3_BUCKET_NAME=${S3_BUCKET_NAME:-arch-ingestion-bucket}
+      - SQS_RASTER_QUEUE=${SQS_RASTER_QUEUE:-Raster-Processing-Queue}
+      - SQS_VECTOR_QUEUE=${SQS_VECTOR_QUEUE:-Vector-Processing-Queue}
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    depends_on:
+      localstack:
+        condition: service_healthy
+    networks:
+      - arch-ai-net
+
+  # =========================================================================
+  # Python Microservice: Raster Line Extraction
+  # =========================================================================
+  raster-line-extraction:
+    container_name: raster-line-extraction
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.python
+      args:
+        SERVICE_DIR: lambda/raster_line_extraction
+        SERVICE_PORT: 8002
+    restart: unless-stopped
+    ports:
+      - "${RASTER_LINE_EXTRACTION_PORT:-8002}:8002"
+    environment:
+      - AWS_ENDPOINT_URL=http://localstack:4566
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-test}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-test}
+      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1}
+      - S3_BUCKET_NAME=${S3_BUCKET_NAME:-arch-ingestion-bucket}
+      - SQS_RASTER_QUEUE=${SQS_RASTER_QUEUE:-Raster-Processing-Queue}
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    depends_on:
+      localstack:
+        condition: service_healthy
+    networks:
+      - arch-ai-net
+
+  # =========================================================================
+  # Python Microservice: DXF Geometry Extraction
+  # =========================================================================
+  dxf-geometry-extraction:
+    container_name: dxf-geometry-extraction
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.python
+      args:
+        SERVICE_DIR: lambda/dxf_geometry_extraction
+        SERVICE_PORT: 8003
+    restart: unless-stopped
+    ports:
+      - "${DXF_GEOMETRY_EXTRACTION_PORT:-8003}:8003"
+    environment:
+      - AWS_ENDPOINT_URL=http://localstack:4566
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-test}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-test}
+      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1}
+      - S3_BUCKET_NAME=${S3_BUCKET_NAME:-arch-ingestion-bucket}
+      - SQS_VECTOR_QUEUE=${SQS_VECTOR_QUEUE:-Vector-Processing-Queue}
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    depends_on:
+      localstack:
+        condition: service_healthy
+    networks:
+      - arch-ai-net
+
+  # =========================================================================
+  # Python Microservice: Graph Export (IFC / GeoJSON)
+  # =========================================================================
+  graph-export:
+    container_name: graph-export
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.python
+      args:
+        SERVICE_DIR: lambda/graph_export
+        SERVICE_PORT: 8004
+    restart: unless-stopped
+    ports:
+      - "${GRAPH_EXPORT_PORT:-8004}:8004"
+    environment:
+      - AWS_ENDPOINT_URL=http://localstack:4566
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-test}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-test}
+      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1}
+      - S3_BUCKET_NAME=${S3_BUCKET_NAME:-arch-ingestion-bucket}
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    depends_on:
+      localstack:
+        condition: service_healthy
+    networks:
+      - arch-ai-net
+
+  # =========================================================================
+  # Compliance Checker — LangGraph Agent + Qdrant
+  # =========================================================================
+  compliance-checker:
+    container_name: compliance-checker
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.python.langgraph
+    restart: unless-stopped
+    ports:
+      - "${COMPLIANCE_CHECKER_PORT:-8005}:8005"
+    environment:
+      - AWS_ENDPOINT_URL=http://localstack:4566
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-test}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-test}
+      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1}
+      - S3_BUCKET_NAME=${S3_BUCKET_NAME:-arch-ingestion-bucket}
+      - QDRANT_URI=${QDRANT_URI:-http://qdrant:6333}
+      - QDRANT_HOST=${QDRANT_HOST:-qdrant}
+      - QDRANT_PORT=${QDRANT_PORT:-6333}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-sk-placeholder}
+      - LANGCHAIN_TRACING_V2=${LANGCHAIN_TRACING_V2:-false}
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    depends_on:
+      localstack:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+    networks:
+      - arch-ai-net
+
+  # =========================================================================
+  # Frontend Visualizer — React (Vite) + Nginx Control Tower
+  # =========================================================================
+  frontend-visualizer:
+    container_name: frontend-visualizer
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+    depends_on:
+      - dimension-audit
+      - file-ingestion
+    networks:
+      - arch-ai-net
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+# =============================================================================
+# Named Volumes
+# =============================================================================
+volumes:
+  localstack-data:
+    driver: local
+  qdrant-data:
+    driver: local
+
+# =============================================================================
+# Shared Network
+# =============================================================================
+networks:
+  arch-ai-net:
+    name: arch-ai-net
+    driver: bridge

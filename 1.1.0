@@ -1,0 +1,17 @@
+Collecting ezdxf
+  Downloading ezdxf-1.4.3-cp311-cp311-win_amd64.whl.metadata (10 kB)
+Collecting pyparsing>=2.0.1 (from ezdxf)
+  Downloading pyparsing-3.3.2-py3-none-any.whl.metadata (5.8 kB)
+Requirement already satisfied: typing_extensions>=4.6.0 in c:\users\badre\.pyenv\pyenv-win\versions\3.11.9\lib\site-packages (from ezdxf) (4.15.0)
+Requirement already satisfied: numpy in c:\users\badre\.pyenv\pyenv-win\versions\3.11.9\lib\site-packages (from ezdxf) (2.4.2)
+Collecting fonttools (from ezdxf)
+  Downloading fonttools-4.62.1-cp311-cp311-win_amd64.whl.metadata (119 kB)
+     ------------------------------------ 119.8/119.8 kB 782.5 kB/s eta 0:00:00
+Downloading ezdxf-1.4.3-cp311-cp311-win_amd64.whl (2.9 MB)
+   ---------------------------------------- 2.9/2.9 MB 5.0 MB/s eta 0:00:00
+Downloading pyparsing-3.3.2-py3-none-any.whl (122 kB)
+   ---------------------------------------- 122.8/122.8 kB 7.5 MB/s eta 0:00:00
+Downloading fonttools-4.62.1-cp311-cp311-win_amd64.whl (2.3 MB)
+   ---------------------------------------- 2.3/2.3 MB 11.5 MB/s eta 0:00:00
+Installing collected packages: pyparsing, fonttools, ezdxf
+Successfully installed ezdxf-1.4.3 fonttools-4.62.1 pyparsing-3.3.2

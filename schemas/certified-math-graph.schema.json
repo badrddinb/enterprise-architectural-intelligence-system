@@ -1,0 +1,448 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://enterprise-arch-intel.systems/schemas/certified-math-graph.schema.json",
+  "title": "CertifiedMathGraph",
+  "description": "Data contract for a certified mathematical graph derived from extracted coordinates, representing the topological and geometric structure of an architectural plan.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "graphId",
+    "sourceCoordinatesId",
+    "sourceFileId",
+    "createdAt",
+    "nodes",
+    "edges",
+    "faces",
+    "certification"
+  ],
+  "properties": {
+    "graphId": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this mathematical graph."
+    },
+    "sourceCoordinatesId": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Reference to the RawCoordinates.coordinatesId this graph was built from."
+    },
+    "sourceFileId": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Reference to the UploadedFile.fileId (transitive lineage)."
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp of when the graph was constructed."
+    },
+    "topologyType": {
+      "type": "string",
+      "enum": ["planar", "non-planar"],
+      "description": "Whether the graph is planar (no edge crossings) or non-planar."
+    },
+    "nodeCount": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 100000,
+      "description": "Total number of nodes in the graph."
+    },
+    "edgeCount": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 500000,
+      "description": "Total number of edges in the graph."
+    },
+    "faceCount": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 200000,
+      "description": "Total number of faces (enclosed regions) in the graph."
+    },
+    "nodes": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 100000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["nodeId", "pointId", "x", "y", "nodeType"],
+        "properties": {
+          "nodeId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique identifier for this graph node."
+          },
+          "pointId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Reference to the source RawCoordinates point."
+          },
+          "x": {
+            "type": "number",
+            "description": "X coordinate of the node."
+          },
+          "y": {
+            "type": "number",
+            "description": "Y coordinate of the node."
+          },
+          "z": {
+            "type": "number",
+            "description": "Z coordinate of the node (for 3D graphs)."
+          },
+          "nodeType": {
+            "type": "string",
+            "enum": [
+              "wall-corner",
+              "wall-intersection",
+              "wall-endpoint",
+              "column-center",
+              "door-hinge",
+              "door-swing-end",
+              "window-corner",
+              "stair-corner",
+              "beam-endpoint",
+              "slab-corner",
+              "grid-intersection",
+              "reference-point",
+              "structural-node",
+              "other"
+            ],
+            "description": "Semantic classification of the node."
+          },
+          "degree": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100,
+            "description": "Number of edges connected to this node."
+          },
+          "properties": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "isStructural": {
+                "type": "boolean",
+                "description": "Whether this node represents a structural element."
+              },
+              "isLoadBearing": {
+                "type": "boolean",
+                "description": "Whether this node carries structural loads."
+              },
+              "material": {
+                "type": "string",
+                "enum": [
+                  "concrete",
+                  "steel",
+                  "wood",
+                  "masonry",
+                  "glass",
+                  "composite",
+                  "unknown"
+                ],
+                "description": "Material type at this node."
+              }
+            },
+            "description": "Optional structural and material properties of the node."
+          }
+        }
+      },
+      "description": "Array of graph nodes (vertices)."
+    },
+    "edges": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 500000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["edgeId", "fromNodeId", "toNodeId", "edgeType"],
+        "properties": {
+          "edgeId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique identifier for this graph edge."
+          },
+          "fromNodeId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Source node of the edge."
+          },
+          "toNodeId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Target node of the edge."
+          },
+          "edgeType": {
+            "type": "string",
+            "enum": [
+              "wall-segment",
+              "door-opening",
+              "window-opening",
+              "beam",
+              "column-line",
+              "slab-edge",
+              "stair-run",
+              "dimension-constraint",
+              "adjacency",
+              "containment",
+              "grid-line",
+              "other"
+            ],
+            "description": "Semantic classification of the edge."
+          },
+          "weight": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Geometric length of the edge in coordinate system units."
+          },
+          "isDirected": {
+            "type": "boolean",
+            "description": "Whether the edge has a direction (true) or is undirected (false)."
+          },
+          "thickness": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Thickness of the element this edge represents (e.g., wall thickness)."
+          },
+          "properties": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "isStructural": {
+                "type": "boolean",
+                "description": "Whether this edge represents a structural element."
+              },
+              "isLoadBearing": {
+                "type": "boolean",
+                "description": "Whether this edge is load-bearing."
+              },
+              "fireRating": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 240,
+                "description": "Fire resistance rating in minutes."
+              },
+              "material": {
+                "type": "string",
+                "enum": [
+                  "concrete",
+                  "steel",
+                  "wood",
+                  "masonry",
+                  "glass",
+                  "composite",
+                  "unknown"
+                ],
+                "description": "Material of the element this edge represents."
+              }
+            },
+            "description": "Optional properties of the edge."
+          }
+        }
+      },
+      "description": "Array of graph edges."
+    },
+    "faces": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 200000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["faceId", "boundaryEdgeIds", "area"],
+        "properties": {
+          "faceId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique identifier for this face."
+          },
+          "boundaryEdgeIds": {
+            "type": "array",
+            "minItems": 3,
+            "maxItems": 1000,
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Ordered list of edge IDs forming the face boundary."
+          },
+          "area": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Calculated area of the face in square coordinate units."
+          },
+          "perimeter": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Calculated perimeter in coordinate units."
+          },
+          "faceType": {
+            "type": "string",
+            "enum": [
+              "room",
+              "corridor",
+              "hallway",
+              "stairwell",
+              "elevator-shaft",
+              "mechanical-room",
+              "restroom",
+              "kitchen",
+              "balcony",
+              "terrace",
+              "parking-space",
+              "open-area",
+              "structural-bay",
+              "other"
+            ],
+            "description": "Semantic classification of the enclosed region."
+          },
+          "properties": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "occupancyType": {
+                "type": "string",
+                "enum": [
+                  "assembly",
+                  "business",
+                  "educational",
+                  "factory",
+                  "institutional",
+                  "mercantile",
+                  "residential",
+                  "storage",
+                  "utility",
+                  "unclassified"
+                ],
+                "description": "Building code occupancy classification."
+              },
+              "isFireRated": {
+                "type": "boolean",
+                "description": "Whether this face has fire-rated boundaries."
+              },
+              "isMeansOfEgress": {
+                "type": "boolean",
+                "description": "Whether this face is part of a means of egress path."
+              }
+            },
+            "description": "Building code related properties."
+          }
+        }
+      },
+      "description": "Array of graph faces (enclosed regions bounded by edges)."
+    },
+    "certification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "isCertified",
+        "certifiedAt",
+        "certifiedBy",
+        "algorithmVersion",
+        "checks"
+      ],
+      "properties": {
+        "isCertified": {
+          "type": "boolean",
+          "description": "Whether the graph passed all certification checks."
+        },
+        "certifiedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp of certification."
+        },
+        "certifiedBy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["userId", "email"],
+          "properties": {
+            "userId": {
+              "type": "string",
+              "format": "uuid",
+              "description": "User who approved the certification."
+            },
+            "email": {
+              "type": "string",
+              "format": "email",
+              "description": "Email of the certifier."
+            },
+            "role": {
+              "type": "string",
+              "enum": ["licensed-architect", "structural-engineer", "system-auditor"],
+              "description": "Professional role of the certifier."
+            },
+            "licenseNumber": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "description": "Professional license number of the certifier."
+            }
+          },
+          "description": "Identity of the certifying authority."
+        },
+        "algorithmVersion": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$",
+          "description": "Version of the graph construction algorithm."
+        },
+        "checksum": {
+          "type": "string",
+          "pattern": "^[a-fA-F0-9]{64}$",
+          "description": "SHA-256 checksum of the canonical graph serialization for tamper detection."
+        },
+        "checks": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 50,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["checkId", "checkName", "passed", "description"],
+            "properties": {
+              "checkId": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Unique identifier for this check."
+              },
+              "checkName": {
+                "type": "string",
+                "enum": [
+                  "graph-connectivity",
+                  "planarity-verification",
+                  "duplicate-node-detection",
+                  "duplicate-edge-detection",
+                  "dangling-edge-detection",
+                  "face-closure-verification",
+                  "coordinate-consistency",
+                  "dimensional-integrity",
+                  "topology-completeness",
+                  "structural-continuity",
+                  "spatial-consistency",
+                  "self-intersection-detection"
+                ],
+                "description": "Name of the certification check."
+              },
+              "passed": {
+                "type": "boolean",
+                "description": "Whether the check passed."
+              },
+              "description": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2048,
+                "description": "Description of the check result, including failure details."
+              },
+              "severity": {
+                "type": "string",
+                "enum": ["critical", "warning", "info"],
+                "description": "Severity level if the check did not pass."
+              }
+            }
+          },
+          "description": "Array of certification check results."
+        }
+      },
+      "description": "Certification metadata proving the mathematical correctness and integrity of the graph."
+    }
+  }
+}

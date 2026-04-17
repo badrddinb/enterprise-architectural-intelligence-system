@@ -1,0 +1,17 @@
+# Raster Line Extraction Lambda — Python Dependencies
+# ========================================================
+# NOTE: boto3 and botocore are provided by the AWS Lambda Python 3.12 runtime.
+# They are listed here for local development and SAM/CDK deployment tooling only.
+
+boto3>=1.28.0,<2.0.0
+botocore>=1.31.0,<2.0.0
+
+# Core CV dependencies
+opencv-python-headless>=4.8.0,<5.0.0
+numpy>=1.24.0,<3.0.0
+
+# PDF-to-image conversion (no system dependencies required)
+PyMuPDF>=1.24.0,<2.0.0
+
+# Spatial indexing for dimension linking (optional — falls back to brute-force)
+scipy>=1.10.0,<2.0.0

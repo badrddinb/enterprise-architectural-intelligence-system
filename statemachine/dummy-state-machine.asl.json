@@ -1,0 +1,77 @@
+{
+  "Comment": "Simplified placeholder state machine for local LocalStack testing of the Architectural Plan Processing pipeline.",
+  "StartAt": "ValidateUpload",
+  "TimeoutSeconds": 3600,
+  "Version": "1.0",
+  "States": {
+    "ValidateUpload": {
+      "Type": "Pass",
+      "Comment": "Stub: validates uploaded file integrity and registers in the system.",
+      "Result": {
+        "fileId": "stub-file-001",
+        "fileName": "test-plan.pdf",
+        "status": "validated",
+        "validatedAt": "2025-01-01T00:00:00Z"
+      },
+      "ResultPath": "$.uploadedFile",
+      "Next": "CropZones"
+    },
+    "CropZones": {
+      "Type": "Pass",
+      "Comment": "Stub: performs zone detection and cropping on the validated plan.",
+      "Result": {
+        "zones": [
+          { "zoneId": "zone-1", "label": "floor-plan", "confidence": 0.95 }
+        ],
+        "status": "cropped"
+      },
+      "ResultPath": "$.croppedZones",
+      "Next": "ExtractCoordinates"
+    },
+    "ExtractCoordinates": {
+      "Type": "Pass",
+      "Comment": "Stub: extracts raw coordinate tuples and dimension annotations.",
+      "Result": {
+        "coordinates": [
+          { "x": 0.0, "y": 0.0, "z": 0.0 },
+          { "x": 150.0, "y": 0.0, "z": 0.0 }
+        ],
+        "dimensions": [
+          { "type": "linear", "value": 150.0, "unit": "cm" }
+        ],
+        "status": "extracted"
+      },
+      "ResultPath": "$.rawCoordinates",
+      "Next": "BuildMathGraph"
+    },
+    "BuildMathGraph": {
+      "Type": "Pass",
+      "Comment": "Stub: constructs mathematical graph from verified coordinates.",
+      "Result": {
+        "nodes": 2,
+        "edges": 1,
+        "faces": 0,
+        "certified": true,
+        "status": "certified"
+      },
+      "ResultPath": "$.certifiedMathGraph",
+      "Next": "GenerateComplianceReport"
+    },
+    "GenerateComplianceReport": {
+      "Type": "Pass",
+      "Comment": "Stub: evaluates certified graph against building codes.",
+      "Result": {
+        "reportId": "rpt-stub-001",
+        "complianceStatus": "PASS",
+        "violations": [],
+        "status": "complete"
+      },
+      "ResultPath": "$.complianceReport",
+      "Next": "Success"
+    },
+    "Success": {
+      "Type": "Succeed",
+      "Comment": "The architectural plan has been fully processed (stub)."
+    }
+  }
+}

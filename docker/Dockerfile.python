@@ -1,0 +1,73 @@
+# =============================================================================
+# Dockerfile.python — Base template for Python microservices
+# Used by: file-ingestion, raster-line-extraction, dxf-geometry-extraction, graph-export
+# =============================================================================
+# Build context: project root
+#   docker build -f docker/Dockerfile.python
+#          --build-arg SERVICE_DIR=lambda/file_ingestion
+#          --build-arg SERVICE_PORT=8001
+#          -t file-ingestion:latest .
+# =============================================================================
+
+FROM python:3.12-slim AS base
+
+LABEL maintainer="ArchIntel DevOps"
+LABEL description="Base Python microservice for the Architectural Intelligence System"
+LABEL version="1.0.0"
+
+# Build arguments — override per service
+ARG SERVICE_DIR=lambda/file_ingestion
+ARG SERVICE_PORT=8001
+ARG EXTRA_PIP_FLAGS=""
+
+# Service port available at runtime
+ENV SERVICE_PORT=${SERVICE_PORT}
+
+# Prevent Python from writing .pyc files and enable unbuffered stdout/stderr
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# Install system dependencies (curl for healthcheck, build tools for native extensions)
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        curl \
+        build-essential \
+        gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user
+RUN groupadd -r appgroup && useradd -r -g appgroup -d /app -s /sbin/nologin appuser
+
+WORKDIR /app
+
+# ---------------------------------------------------------------------------
+# Stage: Install Python dependencies
+# ---------------------------------------------------------------------------
+# Copy requirements first for Docker layer caching
+COPY ${SERVICE_DIR}/requirements.txt ./requirements.txt
+
+RUN pip install --no-cache-dir fastapi>=0.115.0 uvicorn[standard]>=0.32.0 && \
+    pip install --no-cache-dir -r requirements.txt ${EXTRA_PIP_FLAGS}
+
+# ---------------------------------------------------------------------------
+# Stage: Copy service source code
+# ---------------------------------------------------------------------------
+COPY ${SERVICE_DIR} .
+
+# Fix ownership
+RUN chown -R appuser:appgroup /app
+
+USER appuser
+
+# Expose the service port
+EXPOSE ${SERVICE_PORT}
+
+# Health check — override ENTRYPOINT/CMD in docker-compose if using a
+# different framework (FastAPI, Flask, etc.)
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+  CMD curl -f http://localhost:${SERVICE_PORT}/health || exit 1
+
+# Default: run as a simple Python module. Override in docker-compose as needed.
+CMD ["python", "main.py"]

@@ -1,0 +1,109 @@
+# =========================
+# OS / Editor
+# =========================
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# =========================
+# Environment & Secrets
+# =========================
+.env
+.env.local
+.env.*.local
+!.env.template
+
+# =========================
+# Python
+# =========================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+.eggs/
+*.manifest
+*.spec
+pip-log.txt
+pip-delete-this-directory.txt
+.venv/
+venv/
+ENV/
+env/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+ruff/
+
+# =========================
+# Node.js / Frontend
+# =========================
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+frontend/.temp/
+frontend/.cache/
+*.tsbuildinfo
+
+# =========================
+# Java
+# =========================
+*.class
+*.jar
+*.war
+*.ear
+target/
+.gradle/
+build/
+
+# =========================
+# Docker
+# =========================
+docker/*.log
+
+# =========================
+# Logs
+# =========================
+*.log
+logs/
+
+# =========================
+# CAD / Binary Artifacts
+# =========================
+*.dwg
+*.dxf
+*.pdf
+!frontend/public/**/*.pdf
+
+# =========================
+# Test / Result Outputs
+# =========================
+*_result.json
+*_payload.json
+*_audit.json
+test_*.json
+!test_*.py
+
+# =========================
+# Misc
+# =========================
+*.bak
+*.tmp
+*.temp

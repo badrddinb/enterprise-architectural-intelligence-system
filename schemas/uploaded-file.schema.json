@@ -1,0 +1,164 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://enterprise-arch-intel.systems/schemas/uploaded-file.schema.json",
+  "title": "UploadedFile",
+  "description": "Data contract for a raw uploaded architectural plan file, validated at the ingestion stage.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "fileId",
+    "fileName",
+    "fileSizeBytes",
+    "mimeType",
+    "storageUri",
+    "sha256Checksum",
+    "uploadedBy",
+    "uploadedAt",
+    "metadata"
+  ],
+  "properties": {
+    "fileId": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for the uploaded file."
+    },
+    "fileName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512,
+      "pattern": "^[\\w\\-\\.]+\\.[A-Za-z]{2,5}$",
+      "description": "Original file name including extension."
+    },
+    "fileSizeBytes": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 5368709120,
+      "description": "File size in bytes (max 5 GB for S3 compatibility)."
+    },
+    "mimeType": {
+      "type": "string",
+      "enum": [
+        "image/tiff",
+        "image/png",
+        "image/jpeg",
+        "application/pdf",
+        "application/dxf",
+        "image/vnd.dwg",
+        "image/bmp"
+      ],
+      "description": "MIME type of the uploaded file."
+    },
+    "storageUri": {
+      "type": "string",
+      "pattern": "^s3://[a-z0-9][a-z0-9.\\-]{1,61}[a-z0-9]/.+$",
+      "description": "S3 URI where the file is stored."
+    },
+    "sha256Checksum": {
+      "type": "string",
+      "pattern": "^[a-fA-F0-9]{64}$",
+      "description": "SHA-256 hex digest of the file contents for integrity verification."
+    },
+    "uploadedBy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["userId", "email"],
+      "properties": {
+        "userId": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Identity of the user who uploaded the file."
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "Email address of the uploader."
+        },
+        "role": {
+          "type": "string",
+          "enum": ["architect", "engineer", "technician", "admin"],
+          "description": "Role of the uploader within the system."
+        }
+      },
+      "description": "Identity information of the uploader."
+    },
+    "uploadedAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp of when the file was uploaded."
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["projectName", "clientName", "buildingType"],
+      "properties": {
+        "projectName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "Name of the project this file belongs to."
+        },
+        "projectCode": {
+          "type": "string",
+          "pattern": "^[A-Z]{2,6}-\\d{4}-\\d{3}$",
+          "description": "Structured project code (e.g., ARCH-2026-001)."
+        },
+        "clientName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "Name of the client."
+        },
+        "buildingType": {
+          "type": "string",
+          "enum": [
+            "residential",
+            "commercial",
+            "industrial",
+            "institutional",
+            "mixed-use",
+            "infrastructure"
+          ],
+          "description": "Classification of the building."
+        },
+        "floorNumber": {
+          "type": "integer",
+          "minimum": -10,
+          "maximum": 200,
+          "description": "Floor number represented in this plan (negative for basements)."
+        },
+        "scale": {
+          "type": "string",
+          "pattern": "^1:(\\d+)$",
+          "description": "Drawing scale ratio (e.g., '1:100')."
+        },
+        "drawingDate": {
+          "type": "string",
+          "format": "date",
+          "description": "Date the original drawing was created."
+        },
+        "revisionNumber": {
+          "type": "string",
+          "pattern": "^[A-Z]$",
+          "description": "Single-letter revision identifier (e.g., 'A', 'B')."
+        },
+        "sourceSystem": {
+          "type": "string",
+          "enum": ["autocad", "revit", "sketchup", "manual-scan", "other"],
+          "description": "System that originally produced the plan."
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "minItems": 0,
+          "maxItems": 20,
+          "description": "Freeform tags for categorization."
+        }
+      },
+      "description": "Project and drawing metadata associated with the file."
+    }
+  }
+}

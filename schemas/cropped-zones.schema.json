@@ -1,0 +1,192 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://enterprise-arch-intel.systems/schemas/cropped-zones.schema.json",
+  "title": "CroppedZones",
+  "description": "Data contract for regions of interest cropped from an architectural plan, produced after the cropping stage.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "zonesId",
+    "sourceFileId",
+    "createdAt",
+    "zones"
+  ],
+  "properties": {
+    "zonesId": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this set of cropped zones."
+    },
+    "sourceFileId": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Reference to the UploadedFile.fileId this was cropped from."
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp of when the zones were generated."
+    },
+    "croppedBy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "version"],
+      "properties": {
+        "method": {
+          "type": "string",
+          "enum": ["automatic", "semi-automatic", "manual"],
+          "description": "How the cropping was performed."
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$",
+          "description": "Version of the cropping algorithm or tool used."
+        },
+        "modelId": {
+          "type": "string",
+          "format": "uuid",
+          "description": "If automatic, the ML model version identifier used for zone detection."
+        }
+      },
+      "description": "Provenance information about how the zones were cropped."
+    },
+    "zones": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 500,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "zoneId",
+          "label",
+          "boundingBox",
+          "storageUri",
+          "confidence"
+        ],
+        "properties": {
+          "zoneId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique identifier for this zone."
+          },
+          "label": {
+            "type": "string",
+            "enum": [
+              "floor-plan",
+              "elevation",
+              "section",
+              "detail",
+              "structural-grid",
+              "dimension-line",
+              "title-block",
+              "legend",
+              "north-arrow",
+              "schedule",
+              "hvac",
+              "electrical",
+              "plumbing",
+              "fire-protection",
+              "site-plan",
+              "landscape",
+              "other"
+            ],
+            "description": "Classified type of the cropped zone."
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1024,
+            "description": "Human-readable description of what this zone contains."
+          },
+          "boundingBox": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["x", "y", "width", "height"],
+            "properties": {
+              "x": {
+                "type": "number",
+                "minimum": 0,
+                "description": "X coordinate of the top-left corner in pixels."
+              },
+              "y": {
+                "type": "number",
+                "minimum": 0,
+                "description": "Y coordinate of the top-left corner in pixels."
+              },
+              "width": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "description": "Width of the bounding box in pixels."
+              },
+              "height": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "description": "Height of the bounding box in pixels."
+              },
+              "rotationDegrees": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 360,
+                "description": "Clockwise rotation angle in degrees if the zone is rotated."
+              }
+            },
+            "description": "Axis-aligned or rotated bounding box of the zone within the source image."
+          },
+          "storageUri": {
+            "type": "string",
+            "pattern": "^s3://[a-z0-9][a-z0-9.\\-]{1,61}[a-z0-9]/.+$",
+            "description": "S3 URI where the cropped zone image is stored."
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Detection confidence score (0.0 to 1.0). 1.0 for manual zones."
+          },
+          "parentZoneId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "If this zone is a sub-region of another zone, references that zone's ID."
+          },
+          "ocrExtractedText": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["text", "x", "y"],
+              "properties": {
+                "text": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 512,
+                  "description": "Extracted text string."
+                },
+                "x": {
+                  "type": "number",
+                  "minimum": 0,
+                  "description": "X position of the text within the zone."
+                },
+                "y": {
+                  "type": "number",
+                  "minimum": 0,
+                  "description": "Y position of the text within the zone."
+                },
+                "confidence": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1,
+                  "description": "OCR confidence score."
+                }
+              }
+            },
+            "minItems": 0,
+            "maxItems": 200,
+            "description": "Text extracted via OCR from this zone."
+          }
+        }
+      },
+      "description": "Array of cropped regions of interest."
+    }
+  }
+}

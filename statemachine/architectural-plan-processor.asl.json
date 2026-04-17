@@ -1,0 +1,459 @@
+{
+  "Comment": "Architectural Plan Processing Engine — Deterministic workflow with 5 processing stages and Human-In-The-Loop (HITL) approval gates between each stage. Uses .waitForTaskToken callback pattern for human approvals.",
+  "StartAt": "ValidateUpload",
+  "TimeoutSeconds": 2592000,
+  "Version": "1.0.0",
+  "QueryLanguage": "JSONPath",
+  "States": {
+
+    "ValidateUpload": {
+      "Type": "Task",
+      "Comment": "Validates the uploaded file integrity (checksum, MIME type, schema conformance) and registers the file in the system.",
+      "Resource": "arn:aws:lambda:${REGION}:${ACCOUNT_ID}:function:arch-plan-validate-upload",
+      "InputPath": "$",
+      "OutputPath": "$",
+      "ResultPath": "$.uploadedFile",
+      "Retry": [
+        {
+          "ErrorEquals": ["States.TaskFailed"],
+          "IntervalSeconds": 5,
+          "MaxAttempts": 3,
+          "BackoffRate": 2.0,
+          "JitterStrategy": "FULL"
+        },
+        {
+          "ErrorEquals": ["States.Timeout"],
+          "IntervalSeconds": 30,
+          "MaxAttempts": 2,
+          "BackoffRate": 2.0
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "FailureHandler"
+        }
+      ],
+      "Next": "HITL_ConfirmUpload"
+    },
+
+    "HITL_ConfirmUpload": {
+      "Type": "Task",
+      "Comment": "Pauses execution and waits for a human operator to confirm the uploaded file is correct and complete before proceeding. The task token is sent to the callback payload for external systems to resume execution via SendTaskSuccess/SendTaskFailure.",
+      "Resource": "arn:aws:states:::lambda:waitForTaskToken",
+      "InputPath": "$",
+      "OutputPath": "$",
+      "ResultPath": "$.hitl.confirmUpload",
+      "HeartbeatSeconds": 86400,
+      "TimeoutSeconds": 604800,
+      "Parameters": {
+        "FunctionName": "arn:aws:lambda:${REGION}:${ACCOUNT_ID}:function:arch-plan-hitl-notify",
+        "Payload": {
+          "executionId.$": "$$.Execution.Id",
+          "executionArn.$": "$$.Execution.Name",
+          "stateName": "HITL_ConfirmUpload",
+          "stage": "upload-confirmation",
+          "taskToken.$": "$$.Task.Token",
+          "uploadedFile.$": "$.uploadedFile",
+          "callbackAction": "APPROVE or REJECT via SendTaskSuccess / SendTaskFailure"
+        }
+      },
+      "Retry": [
+        {
+          "ErrorEquals": ["States.Timeout", "States.HeartbeatTimeout"],
+          "IntervalSeconds": 60,
+          "MaxAttempts": 1,
+          "BackoffRate": 1.0
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.Timeout", "States.HeartbeatTimeout"],
+          "ResultPath": "$.error",
+          "Next": "FailureHandler"
+        },
+        {
+          "ErrorEquals": ["HumanRejected", "States.TaskFailed"],
+          "ResultPath": "$.error",
+          "Next": "FailureHandler"
+        }
+      ],
+      "Next": "CropZones"
+    },
+
+    "CropZones": {
+      "Type": "Task",
+      "Comment": "Performs zone detection and cropping on the validated plan file, producing regions of interest (floor plans, sections, details, etc.).",
+      "Resource": "arn:aws:lambda:${REGION}:${ACCOUNT_ID}:function:arch-plan-crop-zones",
+      "InputPath": "$",
+      "OutputPath": "$",
+      "ResultPath": "$.croppedZones",
+      "Retry": [
+        {
+          "ErrorEquals": ["States.TaskFailed"],
+          "IntervalSeconds": 10,
+          "MaxAttempts": 3,
+          "BackoffRate": 2.5,
+          "JitterStrategy": "FULL"
+        },
+        {
+          "ErrorEquals": ["States.Timeout"],
+          "IntervalSeconds": 60,
+          "MaxAttempts": 2,
+          "BackoffRate": 2.0
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "FailureHandler"
+        }
+      ],
+      "Next": "HITL_ReviewZones"
+    },
+
+    "HITL_ReviewZones": {
+      "Type": "Task",
+      "Comment": "Pauses execution for a human to review the cropped zones — verify correct labels, bounding boxes, and that no zones are missing or extraneous.",
+      "Resource": "arn:aws:states:::lambda:waitForTaskToken",
+      "InputPath": "$",
+      "OutputPath": "$",
+      "ResultPath": "$.hitl.reviewZones",
+      "HeartbeatSeconds": 86400,
+      "TimeoutSeconds": 604800,
+      "Parameters": {
+        "FunctionName": "arn:aws:lambda:${REGION}:${ACCOUNT_ID}:function:arch-plan-hitl-notify",
+        "Payload": {
+          "executionId.$": "$$.Execution.Id",
+          "executionArn.$": "$$.Execution.Name",
+          "stateName": "HITL_ReviewZones",
+          "stage": "zone-review",
+          "taskToken.$": "$$.Task.Token",
+          "uploadedFile.$": "$.uploadedFile",
+          "croppedZones.$": "$.croppedZones",
+          "callbackAction": "APPROVE or REJECT via SendTaskSuccess / SendTaskFailure"
+        }
+      },
+      "Retry": [
+        {
+          "ErrorEquals": ["States.Timeout", "States.HeartbeatTimeout"],
+          "IntervalSeconds": 60,
+          "MaxAttempts": 1,
+          "BackoffRate": 1.0
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.Timeout", "States.HeartbeatTimeout"],
+          "ResultPath": "$.error",
+          "Next": "FailureHandler"
+        },
+        {
+          "ErrorEquals": ["HumanRejected", "States.TaskFailed"],
+          "ResultPath": "$.error",
+          "Next": "FailureHandler"
+        }
+      ],
+      "Next": "ExtractCoordinates"
+    },
+
+    "ExtractCoordinates": {
+      "Type": "Task",
+      "Comment": "Extracts raw coordinate tuples, lines, and dimension annotations from the cropped zones using computer vision and/or OCR.",
+      "Resource": "arn:aws:lambda:${REGION}:${ACCOUNT_ID}:function:arch-plan-extract-coordinates",
+      "InputPath": "$",
+      "OutputPath": "$",
+      "ResultPath": "$.rawCoordinates",
+      "Retry": [
+        {
+          "ErrorEquals": ["States.TaskFailed"],
+          "IntervalSeconds": 10,
+          "MaxAttempts": 3,
+          "BackoffRate": 2.5,
+          "JitterStrategy": "FULL"
+        },
+        {
+          "ErrorEquals": ["States.Timeout"],
+          "IntervalSeconds": 60,
+          "MaxAttempts": 2,
+          "BackoffRate": 2.0
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "FailureHandler"
+        }
+      ],
+      "Next": "HITL_VerifyCoordinates"
+    },
+
+    "HITL_VerifyCoordinates": {
+      "Type": "Task",
+      "Comment": "Pauses execution for a human to verify extracted coordinates — check point placement accuracy, line connectivity, and dimension annotation correctness.",
+      "Resource": "arn:aws:states:::lambda:waitForTaskToken",
+      "InputPath": "$",
+      "OutputPath": "$",
+      "ResultPath": "$.hitl.verifyCoordinates",
+      "HeartbeatSeconds": 86400,
+      "TimeoutSeconds": 604800,
+      "Parameters": {
+        "FunctionName": "arn:aws:lambda:${REGION}:${ACCOUNT_ID}:function:arch-plan-hitl-notify",
+        "Payload": {
+          "executionId.$": "$$.Execution.Id",
+          "executionArn.$": "$$.Execution.Name",
+          "stateName": "HITL_VerifyCoordinates",
+          "stage": "coordinate-verification",
+          "taskToken.$": "$$.Task.Token",
+          "uploadedFile.$": "$.uploadedFile",
+          "croppedZones.$": "$.croppedZones",
+          "rawCoordinates.$": "$.rawCoordinates",
+          "callbackAction": "APPROVE or REJECT via SendTaskSuccess / SendTaskFailure"
+        }
+      },
+      "Retry": [
+        {
+          "ErrorEquals": ["States.Timeout", "States.HeartbeatTimeout"],
+          "IntervalSeconds": 60,
+          "MaxAttempts": 1,
+          "BackoffRate": 1.0
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.Timeout", "States.HeartbeatTimeout"],
+          "ResultPath": "$.error",
+          "Next": "FailureHandler"
+        },
+        {
+          "ErrorEquals": ["HumanRejected", "States.TaskFailed"],
+          "ResultPath": "$.error",
+          "Next": "FailureHandler"
+        }
+      ],
+      "Next": "BuildMathGraph"
+    },
+
+    "BuildMathGraph": {
+      "Type": "Task",
+      "Comment": "Constructs the mathematical graph (nodes, edges, faces) from the verified coordinates and runs automated certification checks.",
+      "Resource": "arn:aws:lambda:${REGION}:${ACCOUNT_ID}:function:arch-plan-build-math-graph",
+      "InputPath": "$",
+      "OutputPath": "$",
+      "ResultPath": "$.certifiedMathGraph",
+      "Retry": [
+        {
+          "ErrorEquals": ["States.TaskFailed"],
+          "IntervalSeconds": 15,
+          "MaxAttempts": 3,
+          "BackoffRate": 3.0,
+          "JitterStrategy": "FULL"
+        },
+        {
+          "ErrorEquals": ["States.Timeout"],
+          "IntervalSeconds": 120,
+          "MaxAttempts": 2,
+          "BackoffRate": 2.0
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "FailureHandler"
+        }
+      ],
+      "Next": "HITL_CertifyGraph"
+    },
+
+    "HITL_CertifyGraph": {
+      "Type": "Task",
+      "Comment": "Pauses execution for a licensed professional (architect/engineer) to certify the mathematical graph — verify topology, structural integrity, and spatial correctness.",
+      "Resource": "arn:aws:states:::lambda:waitForTaskToken",
+      "InputPath": "$",
+      "OutputPath": "$",
+      "ResultPath": "$.hitl.certifyGraph",
+      "HeartbeatSeconds": 172800,
+      "TimeoutSeconds": 1209600,
+      "Parameters": {
+        "FunctionName": "arn:aws:lambda:${REGION}:${ACCOUNT_ID}:function:arch-plan-hitl-notify",
+        "Payload": {
+          "executionId.$": "$$.Execution.Id",
+          "executionArn.$": "$$.Execution.Name",
+          "stateName": "HITL_CertifyGraph",
+          "stage": "graph-certification",
+          "taskToken.$": "$$.Task.Token",
+          "uploadedFile.$": "$.uploadedFile",
+          "croppedZones.$": "$.croppedZones",
+          "rawCoordinates.$": "$.rawCoordinates",
+          "certifiedMathGraph.$": "$.certifiedMathGraph",
+          "callbackAction": "APPROVE or REJECT via SendTaskSuccess / SendTaskFailure"
+        }
+      },
+      "Retry": [
+        {
+          "ErrorEquals": ["States.Timeout", "States.HeartbeatTimeout"],
+          "IntervalSeconds": 60,
+          "MaxAttempts": 1,
+          "BackoffRate": 1.0
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.Timeout", "States.HeartbeatTimeout"],
+          "ResultPath": "$.error",
+          "Next": "FailureHandler"
+        },
+        {
+          "ErrorEquals": ["HumanRejected", "States.TaskFailed"],
+          "ResultPath": "$.error",
+          "Next": "FailureHandler"
+        }
+      ],
+      "Next": "GenerateComplianceReport"
+    },
+
+    "GenerateComplianceReport": {
+      "Type": "Task",
+      "Comment": "Evaluates the certified graph against applicable building codes and regulations, producing a detailed compliance report with violations and statistics.",
+      "Resource": "arn:aws:lambda:${REGION}:${ACCOUNT_ID}:function:arch-plan-generate-report",
+      "InputPath": "$",
+      "OutputPath": "$",
+      "ResultPath": "$.complianceReport",
+      "Retry": [
+        {
+          "ErrorEquals": ["States.TaskFailed"],
+          "IntervalSeconds": 15,
+          "MaxAttempts": 3,
+          "BackoffRate": 3.0,
+          "JitterStrategy": "FULL"
+        },
+        {
+          "ErrorEquals": ["States.Timeout"],
+          "IntervalSeconds": 120,
+          "MaxAttempts": 2,
+          "BackoffRate": 2.0
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "FailureHandler"
+        }
+      ],
+      "Next": "HITL_ApproveReport"
+    },
+
+    "HITL_ApproveReport": {
+      "Type": "Task",
+      "Comment": "Final human gate — a qualified professional reviews the compliance report and formally approves, rejects, or conditionally approves it.",
+      "Resource": "arn:aws:states:::lambda:waitForTaskToken",
+      "InputPath": "$",
+      "OutputPath": "$",
+      "ResultPath": "$.hitl.approveReport",
+      "HeartbeatSeconds": 172800,
+      "TimeoutSeconds": 1209600,
+      "Parameters": {
+        "FunctionName": "arn:aws:lambda:${REGION}:${ACCOUNT_ID}:function:arch-plan-hitl-notify",
+        "Payload": {
+          "executionId.$": "$$.Execution.Id",
+          "executionArn.$": "$$.Execution.Name",
+          "stateName": "HITL_ApproveReport",
+          "stage": "report-approval",
+          "taskToken.$": "$$.Task.Token",
+          "uploadedFile.$": "$.uploadedFile",
+          "croppedZones.$": "$.croppedZones",
+          "rawCoordinates.$": "$.rawCoordinates",
+          "certifiedMathGraph.$": "$.certifiedMathGraph",
+          "complianceReport.$": "$.complianceReport",
+          "callbackAction": "APPROVE or REJECT via SendTaskSuccess / SendTaskFailure"
+        }
+      },
+      "Retry": [
+        {
+          "ErrorEquals": ["States.Timeout", "States.HeartbeatTimeout"],
+          "IntervalSeconds": 60,
+          "MaxAttempts": 1,
+          "BackoffRate": 1.0
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.Timeout", "States.HeartbeatTimeout"],
+          "ResultPath": "$.error",
+          "Next": "FailureHandler"
+        },
+        {
+          "ErrorEquals": ["HumanRejected", "States.TaskFailed"],
+          "ResultPath": "$.error",
+          "Next": "FailureHandler"
+        }
+      ],
+      "Next": "FinalizeExecution"
+    },
+
+    "FinalizeExecution": {
+      "Type": "Task",
+      "Comment": "Persists the final approved compliance report, archives all pipeline artifacts, and sends completion notifications.",
+      "Resource": "arn:aws:lambda:${REGION}:${ACCOUNT_ID}:function:arch-plan-finalize",
+      "InputPath": "$",
+      "OutputPath": "$.complianceReport.reportId",
+      "ResultPath": "$.finalizationResult",
+      "Retry": [
+        {
+          "ErrorEquals": ["States.TaskFailed"],
+          "IntervalSeconds": 10,
+          "MaxAttempts": 3,
+          "BackoffRate": 2.0,
+          "JitterStrategy": "FULL"
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "FailureHandler"
+        }
+      ],
+      "Next": "Success"
+    },
+
+    "Success": {
+      "Type": "Succeed",
+      "Comment": "The architectural plan has been fully processed, certified, and compliance-checked with all human approvals obtained."
+    },
+
+    "FailureHandler": {
+      "Type": "Task",
+      "Comment": "Central failure handler — logs the error details, sends failure notifications, and archives partial results for debugging.",
+      "Resource": "arn:aws:lambda:${REGION}:${ACCOUNT_ID}:function:arch-plan-failure-handler",
+      "InputPath": "$",
+      "OutputPath": "$",
+      "ResultPath": "$.failureHandlerResult",
+      "Parameters": {
+        "executionId.$": "$$.Execution.Id",
+        "executionArn.$": "$$.Execution.Name",
+        "stateMachineArn.$": "$$.StateMachine.Id",
+        "error.$": "$.error",
+        "uploadedFile.$": "$.uploadedFile",
+        "croppedZones.$": "$.croppedZones",
+        "rawCoordinates.$": "$.rawCoordinates",
+        "certifiedMathGraph.$": "$.certifiedMathGraph",
+        "complianceReport.$": "$.complianceReport",
+        "timestamp.$": "$$.State.EnteredTime"
+      },
+      "Next": "Failed"
+    },
+
+    "Failed": {
+      "Type": "Fail",
+      "Comment": "Terminal failure state — the workflow encountered an unrecoverable error or was rejected by a human reviewer.",
+      "Error": "ArchitecturalPlanProcessingFailed",
+      "Cause": "The workflow failed due to a processing error, timeout, or human rejection. See failureHandlerResult for details."
+    }
+  }
+}

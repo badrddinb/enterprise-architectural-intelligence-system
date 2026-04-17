@@ -1,0 +1,468 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://enterprise-arch-intel.systems/schemas/compliance-report.schema.json",
+  "title": "ComplianceReport",
+  "description": "Data contract for the final compliance assessment report, evaluating the certified mathematical graph against applicable building codes and regulations.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "reportId",
+    "graphId",
+    "sourceCoordinatesId",
+    "sourceFileId",
+    "createdAt",
+    "overallStatus",
+    "ruleSets",
+    "violations",
+    "statistics",
+    "approvedBy"
+  ],
+  "properties": {
+    "reportId": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this compliance report."
+    },
+    "graphId": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Reference to the CertifiedMathGraph.graphId this report evaluates."
+    },
+    "sourceCoordinatesId": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Reference to the RawCoordinates.coordinatesId (transitive lineage)."
+    },
+    "sourceFileId": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Reference to the UploadedFile.fileId (transitive lineage)."
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp of when the report was generated."
+    },
+    "overallStatus": {
+      "type": "string",
+      "enum": ["compliant", "non-compliant", "conditionally-compliant", "pending-review"],
+      "description": "Overall compliance determination."
+    },
+    "complianceScore": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100,
+      "description": "Numerical compliance score as a percentage (0-100)."
+    },
+    "ruleSets": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 50,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["ruleSetId", "ruleSetName", "version", "status", "rules"],
+        "properties": {
+          "ruleSetId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique identifier for this rule set evaluation."
+          },
+          "ruleSetName": {
+            "type": "string",
+            "enum": [
+              "ibc-international-building-code",
+              "nec-national-electrical-code",
+              "ipc-international-plumbing-code",
+              "imc-international-mechanical-code",
+              "ifc-international-fire-code",
+              "iec-international-energy-conservation-code",
+              "ada-americans-with-disabilities-act",
+              "asce-7-structural-load",
+              "acm-318-concrete",
+              "aisc-360-steel",
+              "nfpa-101-life-safety",
+              "nfpa-13-sprinkler",
+              "local-zoning",
+              "local-fire-code",
+              "local-building-code",
+              "custom-rule-set"
+            ],
+            "description": "Name of the building code or regulation being evaluated."
+          },
+          "version": {
+            "type": "string",
+            "pattern": "^\\d{4}$|^\\d{4}-\\d{2}$|^\\d+\\.\\d+(\\.\\d+)?$",
+            "description": "Version/year of the code (e.g., '2021', '2021-09', '7.0')."
+          },
+          "jurisdiction": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 256,
+            "description": "Jurisdiction this rule set applies to (e.g., 'US-CA', 'EU-FR')."
+          },
+          "status": {
+            "type": "string",
+            "enum": ["compliant", "non-compliant", "conditionally-compliant", "not-applicable"],
+            "description": "Compliance status for this entire rule set."
+          },
+          "rules": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 1000,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["ruleId", "ruleCode", "description", "status", "severity"],
+              "properties": {
+                "ruleId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "description": "Unique identifier for this rule evaluation."
+                },
+                "ruleCode": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128,
+                  "pattern": "^[A-Za-z0-9\\-\\.\\s]+$",
+                  "description": "Code section reference (e.g., 'IBC 1005.1', 'ADA 404.2.3')."
+                },
+                "description": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2048,
+                  "description": "Human-readable description of the rule requirement."
+                },
+                "status": {
+                  "type": "string",
+                  "enum": ["pass", "fail", "warning", "not-applicable", "manual-review-required"],
+                  "description": "Evaluation result for this rule."
+                },
+                "severity": {
+                  "type": "string",
+                  "enum": ["critical", "major", "minor", "info"],
+                  "description": "Severity if the rule failed or needs attention."
+                },
+                "affectedElements": {
+                  "type": "array",
+                  "minItems": 0,
+                  "maxItems": 1000,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["elementType", "elementId"],
+                    "properties": {
+                      "elementType": {
+                        "type": "string",
+                        "enum": ["node", "edge", "face"],
+                        "description": "Type of graph element referenced."
+                      },
+                      "elementId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "ID of the specific graph element."
+                      },
+                      "detail": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 1024,
+                        "description": "Specific detail about how this element relates to the rule violation."
+                      }
+                    }
+                  },
+                  "description": "Graph elements affected by this rule evaluation."
+                },
+                "measuredValue": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["value", "unit"],
+                  "properties": {
+                    "value": {
+                      "type": "number",
+                      "description": "The measured numeric value."
+                    },
+                    "unit": {
+                      "type": "string",
+                      "enum": ["mm", "cm", "m", "in", "ft", "m2", "ft2", "m3", "ft3", "deg", "ratio", "count", "percentage"],
+                      "description": "Unit of the measured value."
+                    }
+                  },
+                  "description": "The actual measured value from the plan."
+                },
+                "requiredValue": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["value", "unit", "comparison"],
+                  "properties": {
+                    "value": {
+                      "type": "number",
+                      "description": "The required threshold value."
+                    },
+                    "unit": {
+                      "type": "string",
+                      "enum": ["mm", "cm", "m", "in", "ft", "m2", "ft2", "m3", "ft3", "deg", "ratio", "count", "percentage"],
+                      "description": "Unit of the required value."
+                    },
+                    "comparison": {
+                      "type": "string",
+                      "enum": ["minimum", "maximum", "exact", "range"],
+                      "description": "Type of comparison required."
+                    },
+                    "rangeMin": {
+                      "type": "number",
+                      "description": "Minimum value for range comparisons."
+                    },
+                    "rangeMax": {
+                      "type": "number",
+                      "description": "Maximum value for range comparisons."
+                    }
+                  },
+                  "description": "The code-required threshold value."
+                },
+                "remediation": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2048,
+                  "description": "Suggested remediation action if the rule failed."
+                }
+              }
+            },
+            "description": "Individual rules within this rule set."
+          }
+        }
+      },
+      "description": "Array of evaluated rule sets (building codes and regulations)."
+    },
+    "violations": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 5000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "violationId",
+          "ruleCode",
+          "severity",
+          "category",
+          "description",
+          "location"
+        ],
+        "properties": {
+          "violationId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique identifier for this violation."
+          },
+          "ruleCode": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "description": "Reference to the rule code section that was violated."
+          },
+          "severity": {
+            "type": "string",
+            "enum": ["critical", "major", "minor"],
+            "description": "Severity of the violation."
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "fire-safety",
+              "structural",
+              "accessibility",
+              "egress",
+              "electrical",
+              "plumbing",
+              "mechanical",
+              "energy",
+              "zoning",
+              "spatial",
+              "dimensional",
+              "life-safety",
+              "occupancy",
+              "other"
+            ],
+            "description": "Category of the violation."
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048,
+            "description": "Detailed description of the violation."
+          },
+          "location": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["elementType", "elementId"],
+            "properties": {
+              "elementType": {
+                "type": "string",
+                "enum": ["node", "edge", "face", "zone"],
+                "description": "Type of the element where the violation is located."
+              },
+              "elementId": {
+                "type": "string",
+                "format": "uuid",
+                "description": "ID of the element where the violation is located."
+              },
+              "faceIds": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 100,
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "description": "Related face IDs if the violation spans multiple spaces."
+              }
+            },
+            "description": "Location of the violation within the graph."
+          },
+          "remediation": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048,
+            "description": "Suggested fix for the violation."
+          }
+        }
+      },
+      "description": "Consolidated array of all violations found across all rule sets."
+    },
+    "statistics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "totalRulesEvaluated",
+        "rulesPassed",
+        "rulesFailed",
+        "rulesWarning",
+        "rulesNotApplicable",
+        "totalViolations",
+        "criticalViolations",
+        "majorViolations",
+        "minorViolations"
+      ],
+      "properties": {
+        "totalRulesEvaluated": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total number of rules evaluated."
+        },
+        "rulesPassed": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of rules that passed."
+        },
+        "rulesFailed": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of rules that failed."
+        },
+        "rulesWarning": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of rules with warnings."
+        },
+        "rulesNotApplicable": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of rules not applicable."
+        },
+        "totalViolations": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total violations across all rule sets."
+        },
+        "criticalViolations": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Count of critical severity violations."
+        },
+        "majorViolations": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Count of major severity violations."
+        },
+        "minorViolations": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Count of minor severity violations."
+        },
+        "totalSpaces": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total number of enclosed spaces (faces) evaluated."
+        },
+        "totalArea": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Total floor area evaluated."
+        },
+        "areaUnit": {
+          "type": "string",
+          "enum": ["m2", "ft2"],
+          "description": "Unit for totalArea."
+        }
+      },
+      "description": "Summary statistics of the compliance evaluation."
+    },
+    "approvedBy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["userId", "email", "decision"],
+      "properties": {
+        "userId": {
+          "type": "string",
+          "format": "uuid",
+          "description": "User who reviewed the compliance report."
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "Email of the reviewer."
+        },
+        "role": {
+          "type": "string",
+          "enum": [
+            "licensed-architect",
+            "structural-engineer",
+            "fire-safety-engineer",
+            "building-inspector",
+            "code-official",
+            "system-auditor"
+          ],
+          "description": "Professional role of the reviewer."
+        },
+        "licenseNumber": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "description": "Professional license number."
+        },
+        "decision": {
+          "type": "string",
+          "enum": ["approved", "rejected", "conditionally-approved", "requires-revision"],
+          "description": "Final human review decision."
+        },
+        "reviewedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp of when the review was completed."
+        },
+        "comments": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8192,
+          "description": "Review comments or conditions for conditional approval."
+        }
+      },
+      "description": "Human reviewer who approved or rejected this compliance report."
+    },
+    "reportStorageUri": {
+      "type": "string",
+      "pattern": "^s3://[a-z0-9][a-z0-9.\\-]{1,61}[a-z0-9]/.+$",
+      "description": "S3 URI where the final PDF/JSON report is stored."
+    }
+  }
+}

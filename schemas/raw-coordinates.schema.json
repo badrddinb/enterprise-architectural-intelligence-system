@@ -1,0 +1,295 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://enterprise-arch-intel.systems/schemas/raw-coordinates.schema.json",
+  "title": "RawCoordinates",
+  "description": "Data contract for coordinate tuples extracted from cropped architectural zones, produced after the coordinate extraction stage.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "coordinatesId",
+    "sourceZonesId",
+    "sourceFileId",
+    "createdAt",
+    "points",
+    "lines",
+    "dimensionAnnotations"
+  ],
+  "properties": {
+    "coordinatesId": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier for this coordinate extraction result."
+    },
+    "sourceZonesId": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Reference to the CroppedZones.zonesId this was extracted from."
+    },
+    "sourceFileId": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Reference to the UploadedFile.fileId (transitive lineage)."
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp of when coordinates were extracted."
+    },
+    "extractedBy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "version"],
+      "properties": {
+        "method": {
+          "type": "string",
+          "enum": ["computer-vision", "ocr-structured", "manual-digitization", "hybrid"],
+          "description": "Extraction method used."
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$",
+          "description": "Version of the extraction algorithm."
+        },
+        "modelId": {
+          "type": "string",
+          "format": "uuid",
+          "description": "ML model identifier if computer vision was used."
+        }
+      },
+      "description": "Provenance information about how coordinates were extracted."
+    },
+    "coordinateSystem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "units", "originX", "originY"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["cartesian-2d", "cartesian-3d", "polar"],
+          "description": "Type of coordinate system used."
+        },
+        "units": {
+          "type": "string",
+          "enum": ["millimeters", "centimeters", "meters", "inches", "feet"],
+          "description": "Measurement unit for all coordinate values."
+        },
+        "originX": {
+          "type": "number",
+          "description": "X coordinate of the origin point."
+        },
+        "originY": {
+          "type": "number",
+          "description": "Y coordinate of the origin point."
+        },
+        "originZ": {
+          "type": "number",
+          "description": "Z coordinate of the origin point (for 3D systems)."
+        },
+        "rotationDegrees": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 360,
+          "description": "Rotation offset applied to align with the coordinate system."
+        }
+      },
+      "description": "Defines the coordinate reference system used for all points."
+    },
+    "points": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 100000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["pointId", "x", "y", "sourceZoneId", "pointType"],
+        "properties": {
+          "pointId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique identifier for this point."
+          },
+          "x": {
+            "type": "number",
+            "description": "X coordinate value."
+          },
+          "y": {
+            "type": "number",
+            "description": "Y coordinate value."
+          },
+          "z": {
+            "type": "number",
+            "description": "Z coordinate value (for 3D systems)."
+          },
+          "sourceZoneId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Reference to the zone this point was extracted from."
+          },
+          "pointType": {
+            "type": "string",
+            "enum": [
+              "corner",
+              "intersection",
+              "center",
+              "endpoint",
+              "midpoint",
+              "tangent",
+              "control-point",
+              "reference",
+              "grid-intersection",
+              "other"
+            ],
+            "description": "Classification of the point."
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Extraction confidence score (1.0 for manual)."
+          },
+          "tolerance": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Positional tolerance/uncertainty in coordinate system units."
+          },
+          "pixelOrigin": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["px", "py"],
+            "properties": {
+              "px": {
+                "type": "number",
+                "minimum": 0,
+                "description": "Original pixel X position in the source zone."
+              },
+              "py": {
+                "type": "number",
+                "minimum": 0,
+                "description": "Original pixel Y position in the source zone."
+              }
+            },
+            "description": "Pixel coordinates in the source zone image for traceability."
+          }
+        }
+      },
+      "description": "Array of extracted coordinate points."
+    },
+    "lines": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 50000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["lineId", "startPointId", "endPointId", "lineType"],
+        "properties": {
+          "lineId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique identifier for this line."
+          },
+          "startPointId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Reference to the starting point."
+          },
+          "endPointId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Reference to the ending point."
+          },
+          "lineType": {
+            "type": "string",
+            "enum": [
+              "wall",
+              "dimension-line",
+              "grid-line",
+              "center-line",
+              "hidden-line",
+              "phantom-line",
+              "section-cut",
+              "elevation-marker",
+              "property-line",
+              "setback-line",
+              "other"
+            ],
+            "description": "Classification of the line."
+          },
+          "measuredLength": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Measured length in coordinate system units (if annotated)."
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Extraction confidence score."
+          }
+        }
+      },
+      "description": "Array of extracted lines connecting points."
+    },
+    "dimensionAnnotations": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 10000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "annotationId",
+          "value",
+          "unit",
+          "startPointId",
+          "endPointId",
+          "sourceZoneId"
+        ],
+        "properties": {
+          "annotationId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique identifier for this dimension annotation."
+          },
+          "value": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "description": "Numeric dimension value."
+          },
+          "unit": {
+            "type": "string",
+            "enum": ["mm", "cm", "m", "in", "ft"],
+            "description": "Unit of the dimension value."
+          },
+          "startPointId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Reference to the starting point of the dimension."
+          },
+          "endPointId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Reference to the ending point of the dimension."
+          },
+          "sourceZoneId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Zone this annotation was extracted from."
+          },
+          "tolerance": {
+            "type": "string",
+            "pattern": "^[\\+\\-]?\\d+(\\.\\d+)?$",
+            "description": "Tolerance string (e.g., '+/-0.5')."
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "OCR extraction confidence for this annotation."
+          }
+        }
+      },
+      "description": "Array of dimension annotations extracted from the plan."
+    }
+  }
+}
